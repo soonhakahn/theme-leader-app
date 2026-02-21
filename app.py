@@ -58,9 +58,11 @@ st.markdown(
 }
 
 .hero h1 {
-  font-size: 1.65rem;
+  font-size: clamp(1.1rem, 4.6vw, 1.65rem);
   margin: 0;
   letter-spacing: 0.2px;
+  line-height: 1.2;
+  word-break: keep-all;
 }
 
 .hero p {
@@ -166,7 +168,7 @@ THEME_MAP: Dict[str, List[str]] = {
 @st.cache_data(ttl=60 * 30)
 def get_krx_listing() -> pd.DataFrame:
     df = fdr.StockListing("KRX")
-    keep = [c for c in ["Code", "Name", "Market", "Marcap"] if c in df.columns]
+    keep = [c for c in ["Code", "Name", "Market", "Sector", "Industry", "Marcap"] if c in df.columns]
     df = df[keep].copy()
     df["Code"] = df["Code"].astype(str).str.zfill(6)
     return df
@@ -369,6 +371,45 @@ def render_candle(code: str, name: str):
     st.plotly_chart(fig, use_container_width=True)
 
 
+def render_stock_analysis(code: str, name: str, listing_df: pd.DataFrame):
+    h = fetch_hist(code)
+    if h is None or h.empty or len(h) < 5:
+        st.info("분석 데이터가 충분하지 않습니다.")
+        return
+
+    close = h["Close"].dropna()
+    vol = h["Volume"].fillna(0)
+
+    latest = float(close.iloc[-1])
+    ret_1m = (latest / float(close.iloc[-21]) - 1) * 100 if len(close) >= 21 else np.nan
+    ret_3m = (latest / float(close.iloc[-63]) - 1) * 100 if len(close) >= 63 else np.nan
+
+    ma20 = close.rolling(20).mean().iloc[-1] if len(close) >= 20 else np.nan
+    ma60 = close.rolling(60).mean().iloc[-1] if len(close) >= 60 else np.nan
+
+    vol20 = vol.rolling(20).mean().iloc[-1] if len(vol) >= 20 else np.nan
+    vol_ratio = float(vol.iloc[-1] / vol20) if vol20 and not np.isnan(vol20) else np.nan
+
+    high_52w = float(close.tail(252).max()) if len(close) >= 2 else latest
+    low_52w = float(close.tail(252).min()) if len(close) >= 2 else latest
+
+    info = listing_df[listing_df["Code"] == code]
+    market = info["Market"].iloc[0] if not info.empty and "Market" in info.columns else "-"
+    sector = info["Sector"].iloc[0] if not info.empty and "Sector" in info.columns else "-"
+    industry = info["Industry"].iloc[0] if not info.empty and "Industry" in info.columns else "-"
+
+    st.markdown("#### 📊 종목 분석")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("1개월 수익률", f"{ret_1m:.2f}%" if pd.notna(ret_1m) else "-")
+    c2.metric("3개월 수익률", f"{ret_3m:.2f}%" if pd.notna(ret_3m) else "-")
+    c3.metric("거래량(20일 대비)", f"{vol_ratio:.2f}x" if pd.notna(vol_ratio) else "-")
+
+    trend = "상승" if pd.notna(ma20) and pd.notna(ma60) and latest > ma20 > ma60 else "중립/약세"
+    st.write(f"- 추세: **{trend}**")
+    st.write(f"- 현재가: **{latest:,.0f}원** / 52주 고가 **{high_52w:,.0f}원**, 52주 저가 **{low_52w:,.0f}원**")
+    st.write(f"- 시장: **{market}**, 섹터: **{sector}**, 업종: **{industry}**")
+
+
 # --------------------------
 # Header
 # --------------------------
@@ -380,8 +421,8 @@ except Exception:
 st.markdown(
     """
 <div class="hero">
-  <h1>ShadowTrade Pro · Theme Leaderboard</h1>
-  <p>종목명 기반 테마 탐색 → 주도주 점수화(거래대금/등락률/관심도/뉴스 모멘텀) → 뉴스 + 3D 감성 차트</p>
+  <h1>ShadowTrade Pro</h1>
+  <p>테마 주도주 Top10 · 차트 · 종목분석 · 뉴스</p>
 </div>
 """,
     unsafe_allow_html=True,
@@ -478,6 +519,13 @@ with tab2:
 
         st.caption("주도점수 = 거래대금(35) + 등락률(30) + 관심도(15) + 뉴스모멘텀(20)")
 
+        st.markdown("#### Top10 빠른 선택")
+        quick_cols = st.columns(2)
+        for i, nm in enumerate(show["종목"].tolist()):
+            with quick_cols[i % 2]:
+                if st.button(f"{i+1}. {nm}", key=f"top_pick_{nm}", use_container_width=True):
+                    st.session_state.picked_stock = nm
+
         options = show["종목"].tolist()
         default_idx = 0
         if st.session_state.picked_stock in options:
@@ -485,13 +533,15 @@ with tab2:
         picked = st.selectbox("상세 보기 종목", options, index=default_idx)
         r = df[df["Name"] == picked].iloc[0]
 
-        c1, c2 = st.columns([1.4, 1])
-        with c1:
+        dtab1, dtab2, dtab3 = st.tabs(["주가 흐름", "종목분석", "관련 뉴스"])
+        with dtab1:
             render_candle(r["Code"], r["Name"])
-        with c2:
+        with dtab2:
+            render_stock_analysis(r["Code"], r["Name"], listing)
+        with dtab3:
             st.markdown("#### 📰 관련 뉴스")
             try:
-                links = fetch_news_links(f"{picked} 특징주", 10)
+                links = fetch_news_links(f"{picked} 특징주", 12)
                 if not links:
                     st.write("- 뉴스가 충분히 없습니다.")
                 for title, link in links:

@@ -16,6 +16,6 @@
     <circle cx="153" cy="41" r="7" fill="#35D39A"/>
     <path d="M153 48 V84" stroke="#35D39A" stroke-width="6" stroke-linecap="round"/>
   </g>
-  <text x="182" y="56" fill="#E8EEFF" font-size="30" font-family="Arial, sans-serif" font-weight="700">ShadowTrade Pro</text>
+  <text x="182" y="56" fill="#E8EEFF" font-size="28" font-family="Arial, sans-serif" font-weight="700">ShadowTrade</text>
   <text x="182" y="84" fill="#A8B5D9" font-size="16" font-family="Arial, sans-serif">Theme Leaderboard</text>
 </svg>

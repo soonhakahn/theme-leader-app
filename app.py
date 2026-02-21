@@ -1,7 +1,6 @@
 import re
 import datetime as dt
-from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -13,9 +12,143 @@ import plotly.graph_objects as go
 import FinanceDataReader as fdr
 from pykrx import stock
 
-st.set_page_config(page_title="테마 주도주 탐색기", layout="wide")
+st.set_page_config(page_title="ShadowTrade Pro", page_icon="📈", layout="wide")
 
-# --- 간단 테마 DB (확장 가능) ---
+# --------------------------
+# Premium UI (dark + glass + 3D)
+# --------------------------
+st.markdown(
+    """
+<style>
+:root {
+  --bg1:#050914;
+  --bg2:#0a1330;
+  --card:#0d1b3ad9;
+  --text:#e8eeff;
+  --sub:#a8b5d9;
+  --accent:#5bc0ff;
+  --accent2:#8a6bff;
+  --ok:#35d39a;
+}
+
+.stApp {
+  background:
+    radial-gradient(1200px 500px at 10% -10%, #18306b55, transparent 60%),
+    radial-gradient(1000px 500px at 90% -20%, #542f8a55, transparent 60%),
+    linear-gradient(145deg, var(--bg1), var(--bg2));
+  color: var(--text);
+}
+
+.main .block-container {
+  max-width: 1200px;
+  padding-top: 1.3rem;
+  padding-bottom: 2.2rem;
+}
+
+.hero {
+  border-radius: 22px;
+  padding: 1.2rem 1.4rem;
+  margin-bottom: 0.9rem;
+  background: linear-gradient(160deg, #10224df0, #101c38f0);
+  border: 1px solid #3f63a455;
+  box-shadow:
+    0 18px 35px #00000066,
+    inset 0 1px 0 #a7c5ff33,
+    inset 0 -1px 0 #00000055;
+}
+
+.hero h1 {
+  font-size: 1.65rem;
+  margin: 0;
+  letter-spacing: 0.2px;
+}
+
+.hero p {
+  margin: 0.35rem 0 0;
+  color: var(--sub);
+}
+
+.glass {
+  border-radius: 20px;
+  padding: 1rem 1.05rem;
+  background: linear-gradient(165deg, #132a58d9, #0d1f45d9);
+  border: 1px solid #4264a85a;
+  box-shadow:
+    0 10px 26px #00000066,
+    inset 0 1px 0 #c2d4ff29,
+    inset 0 -1px 0 #00000055;
+  margin-bottom: 1rem;
+}
+
+.metric-chip {
+  display: inline-block;
+  margin: 0.1rem 0.35rem 0.4rem 0;
+  padding: 0.42rem 0.72rem;
+  border-radius: 999px;
+  border: 1px solid #5a81c84b;
+  background: linear-gradient(145deg, #132b5a, #0c1b3d);
+  color: #d8e5ff;
+  font-size: 0.82rem;
+}
+
+.stTabs [data-baseweb="tab-list"] {
+  gap: 0.35rem;
+}
+
+.stTabs [data-baseweb="tab"] {
+  background: linear-gradient(145deg,#102247,#0b1734);
+  border: 1px solid #3d63ac59;
+  border-radius: 13px;
+  color: #c7d6ff;
+  padding: 0.4rem 0.85rem;
+  height: 2.4rem;
+}
+
+.stTabs [aria-selected="true"] {
+  background: linear-gradient(145deg,#1a3a78,#142957);
+  color: #fff;
+  box-shadow: 0 8px 16px #00000055, inset 0 1px 0 #cde0ff2f;
+}
+
+div[data-testid="stDataFrame"] {
+  border: 1px solid #4a69a452;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 10px 20px #00000045;
+}
+
+.stButton > button {
+  border-radius: 12px;
+  border: 1px solid #5b89cc66;
+  color: #e7efff;
+  background: linear-gradient(145deg, #1a3e80, #123065);
+  box-shadow: 0 8px 14px #00000050, inset 0 1px 0 #d7e6ff2a;
+  font-weight: 600;
+}
+
+.stSelectbox > div > div,
+.stTextInput > div > div > input,
+.stTextArea textarea {
+  background: #0d1c3f !important;
+  color: #eaf0ff !important;
+  border: 1px solid #4a67a05c !important;
+  border-radius: 11px !important;
+}
+
+.small-note {
+  color:#9db0df;
+  font-size:0.82rem;
+}
+
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+
+# --------------------------
+# Theme universe (editable)
+# --------------------------
 THEME_MAP: Dict[str, List[str]] = {
     "반도체": ["삼성전자", "SK하이닉스", "한미반도체", "리노공업", "DB하이텍", "원익IPS", "ISC"],
     "2차전지": ["에코프로", "에코프로비엠", "엘앤에프", "포스코퓨처엠", "LG에너지솔루션", "삼성SDI"],
@@ -30,43 +163,13 @@ THEME_MAP: Dict[str, List[str]] = {
 }
 
 
-@dataclass
-class LeaderRow:
-    code: str
-    name: str
-    theme: str
-    chg_pct: float
-    value: float
-    marcap: float
-    popularity: float
-    news_hits: int
-    score: float
-
-
 @st.cache_data(ttl=60 * 30)
 def get_krx_listing() -> pd.DataFrame:
     df = fdr.StockListing("KRX")
-    df = df[["Code", "Name", "Market", "Sector", "Industry", "Marcap"]].copy()
+    keep = [c for c in ["Code", "Name", "Market", "Marcap"] if c in df.columns]
+    df = df[keep].copy()
     df["Code"] = df["Code"].astype(str).str.zfill(6)
     return df
-
-
-@st.cache_data(ttl=60 * 10)
-def get_latest_ohlcv_and_value(date_str: str) -> pd.DataFrame:
-    ohlcv = stock.get_market_ohlcv_by_ticker(date_str, market="ALL")
-    ohlcv = ohlcv.rename(columns={"종가": "close", "등락률": "chg_pct", "거래대금": "value"})
-    ohlcv.index.name = "Code"
-    ohlcv = ohlcv.reset_index()
-    ohlcv["Code"] = ohlcv["Code"].astype(str).str.zfill(6)
-    return ohlcv[["Code", "close", "chg_pct", "value"]]
-
-
-@st.cache_data(ttl=60 * 10)
-def get_latest_marcap(date_str: str) -> pd.DataFrame:
-    mc = stock.get_market_cap_by_ticker(date_str, market="ALL").reset_index()
-    mc = mc.rename(columns={"티커": "Code", "시가총액": "marcap"})
-    mc["Code"] = mc["Code"].astype(str).str.zfill(6)
-    return mc[["Code", "marcap"]]
 
 
 def latest_bday_str() -> str:
@@ -75,8 +178,7 @@ def latest_bday_str() -> str:
         day = d - dt.timedelta(days=i)
         s = day.strftime("%Y%m%d")
         try:
-            test = stock.get_market_ticker_list(s)
-            if test:
+            if stock.get_market_ticker_list(s):
                 return s
         except Exception:
             pass
@@ -84,190 +186,267 @@ def latest_bday_str() -> str:
 
 
 @st.cache_data(ttl=60 * 10)
-def fetch_naver_news_titles(query: str, limit: int = 30) -> List[str]:
+def get_latest_ohlcv(date_str: str) -> pd.DataFrame:
+    o = stock.get_market_ohlcv_by_ticker(date_str, market="ALL").reset_index()
+    o = o.rename(columns={"티커": "Code", "종가": "close", "등락률": "chg_pct", "거래대금": "value"})
+    o["Code"] = o["Code"].astype(str).str.zfill(6)
+    return o[["Code", "close", "chg_pct", "value"]]
+
+
+@st.cache_data(ttl=60 * 10)
+def get_latest_marcap(date_str: str) -> pd.DataFrame:
+    m = stock.get_market_cap_by_ticker(date_str, market="ALL").reset_index()
+    m = m.rename(columns={"티커": "Code", "시가총액": "marcap"})
+    m["Code"] = m["Code"].astype(str).str.zfill(6)
+    return m[["Code", "marcap"]]
+
+
+@st.cache_data(ttl=60 * 8)
+def fetch_news_titles(query: str, limit: int = 20) -> List[str]:
     url = f"https://search.naver.com/search.naver?where=news&query={query}"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    r = requests.get(url, headers=headers, timeout=10)
+    r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
     r.raise_for_status()
     soup = BeautifulSoup(r.text, "lxml")
-    titles = []
-    for tag in soup.select("a.news_tit")[:limit]:
-        t = tag.get("title") or tag.get_text(" ", strip=True)
+    out = []
+    for a in soup.select("a.news_tit")[:limit]:
+        t = a.get("title") or a.get_text(" ", strip=True)
         if t:
-            titles.append(t)
-    return titles
+            out.append(t)
+    return out
 
 
-@st.cache_data(ttl=60 * 30)
-def build_name_to_code() -> Dict[str, str]:
-    ls = get_krx_listing()
-    return {row.Name: row.Code for row in ls.itertuples()}
+@st.cache_data(ttl=60 * 10)
+def fetch_news_links(query: str, limit: int = 10) -> List[tuple]:
+    url = f"https://search.naver.com/search.naver?where=news&query={query}"
+    r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+    r.raise_for_status()
+    soup = BeautifulSoup(r.text, "lxml")
+    out = []
+    for a in soup.select("a.news_tit")[:limit]:
+        title = a.get("title") or a.get_text(" ", strip=True)
+        link = a.get("href")
+        if title and link:
+            out.append((title, link))
+    return out
 
 
-def infer_themes(stock_name: str) -> List[str]:
-    found = [theme for theme, names in THEME_MAP.items() if stock_name in names]
-    if found:
-        return found
+def minmax(s: pd.Series) -> pd.Series:
+    if len(s) == 0 or s.max() == s.min():
+        return pd.Series(np.zeros(len(s)), index=s.index)
+    return (s - s.min()) / (s.max() - s.min())
 
-    # 뉴스 키워드 기반 가벼운 추정
+
+def infer_themes(name: str) -> List[str]:
+    direct = [t for t, arr in THEME_MAP.items() if name in arr]
+    if direct:
+        return direct
     guessed = []
     try:
-        titles = " ".join(fetch_naver_news_titles(stock_name, 20))
-        for theme in THEME_MAP.keys():
-            if re.search(theme, titles, re.IGNORECASE):
-                guessed.append(theme)
+        blob = " ".join(fetch_news_titles(name, 25))
+        for t in THEME_MAP.keys():
+            if re.search(t, blob, re.IGNORECASE):
+                guessed.append(t)
     except Exception:
         pass
-
     return guessed[:3]
 
 
-def popularity_proxy(names: List[str]) -> Dict[str, float]:
-    # 네이버 뉴스 검색결과 수를 인기 대리값으로 사용
-    result = {}
-    for n in names:
-        try:
-            titles = fetch_naver_news_titles(n, limit=20)
-            result[n] = float(len(titles))
-        except Exception:
-            result[n] = 0.0
-    return result
-
-
-def news_hits_for_name(name: str) -> int:
-    try:
-        return len(fetch_naver_news_titles(f"{name} 특징주", limit=20))
-    except Exception:
-        return 0
-
-
-def minmax(series: pd.Series) -> pd.Series:
-    if series.max() == series.min():
-        return pd.Series(np.zeros(len(series)), index=series.index)
-    return (series - series.min()) / (series.max() - series.min())
-
-
-def calc_leaders(theme: str, top_n: int = 10, min_marcap_krw: int = 500_000_000_000) -> pd.DataFrame:
-    name_code = build_name_to_code()
-    candidates = [n for n in THEME_MAP.get(theme, []) if n in name_code]
-    if not candidates:
+def build_top(theme: str, min_marcap=500_000_000_000, top_n=10) -> pd.DataFrame:
+    listing = get_krx_listing()
+    if theme not in THEME_MAP:
         return pd.DataFrame()
 
-    date_str = latest_bday_str()
-    listing = get_krx_listing()
-    px = get_latest_ohlcv_and_value(date_str)
-    mc = get_latest_marcap(date_str)
+    universe = pd.DataFrame({"Name": THEME_MAP[theme]})
+    universe = universe.merge(listing[["Name", "Code", "Market"]], on="Name", how="left").dropna(subset=["Code"])
 
-    cand = pd.DataFrame({"Name": candidates})
-    cand["Code"] = cand["Name"].map(name_code)
-    df = cand.merge(px, on="Code", how="left").merge(mc, on="Code", how="left")
-    df = df.merge(listing[["Code", "Market"]], on="Code", how="left")
+    ds = latest_bday_str()
+    px = get_latest_ohlcv(ds)
+    mc = get_latest_marcap(ds)
 
-    # 인기/뉴스
-    pop_map = popularity_proxy(candidates)
-    df["popularity"] = df["Name"].map(pop_map).fillna(0)
-    df["news_hits"] = df["Name"].map(news_hits_for_name)
-
-    # 필터: 시총 5천억 이상
-    df = df[df["marcap"] >= min_marcap_krw].copy()
+    df = universe.merge(px, on="Code", how="left").merge(mc, on="Code", how="left")
+    df = df[df["marcap"] >= min_marcap].copy()
     if df.empty:
         return df
 
-    # 주도주 점수(요청 기준 반영)
-    # 거래대금(35) + 상승률(30) + 인기검색(15) + 뉴스모멘텀(20)
+    # proxies for "실시간 조회순위" and 뉴스 모멘텀
+    pop = {}
+    hit = {}
+    for n in df["Name"].tolist():
+        try:
+            t = fetch_news_titles(n, 20)
+            pop[n] = float(len(t))
+            hit[n] = len(fetch_news_titles(f"{n} 특징주", 20))
+        except Exception:
+            pop[n], hit[n] = 0.0, 0
+
+    df["popularity"] = df["Name"].map(pop)
+    df["news_hits"] = df["Name"].map(hit)
+
+    # leader model from your rules
+    # 거래대금 + 등락률 + 조회(관심) + 뉴스(재료)
     df["s_value"] = minmax(df["value"]) * 35
     df["s_chg"] = minmax(df["chg_pct"]) * 30
     df["s_pop"] = minmax(df["popularity"]) * 15
     df["s_news"] = minmax(df["news_hits"]) * 20
-    df["leader_score"] = df[["s_value", "s_chg", "s_pop", "s_news"]].sum(axis=1)
+    df["leader_score"] = (df["s_value"] + df["s_chg"] + df["s_pop"] + df["s_news"]).round(2)
 
-    df = df.sort_values("leader_score", ascending=False).head(top_n)
-    return df
+    return df.sort_values("leader_score", ascending=False).head(top_n)
 
 
 @st.cache_data(ttl=60 * 10)
-def fetch_price_history(code: str, days: int = 120) -> pd.DataFrame:
+def fetch_hist(code: str, days: int = 240) -> pd.DataFrame:
     end = dt.date.today()
     start = end - dt.timedelta(days=days)
-    df = fdr.DataReader(code, start, end)
-    return df
+    return fdr.DataReader(code, start, end)
 
 
-def render_chart(code: str, name: str):
-    hist = fetch_price_history(code)
-    if hist.empty:
+def render_candle(code: str, name: str):
+    df = fetch_hist(code)
+    if df.empty:
         st.warning("차트 데이터가 없습니다.")
         return
-
     fig = go.Figure(
-        data=[
-            go.Candlestick(
-                x=hist.index,
-                open=hist["Open"],
-                high=hist["High"],
-                low=hist["Low"],
-                close=hist["Close"],
-                name=name,
-            )
-        ]
+        go.Candlestick(
+            x=df.index,
+            open=df["Open"],
+            high=df["High"],
+            low=df["Low"],
+            close=df["Close"],
+            increasing_line_color="#43d69f",
+            decreasing_line_color="#ff6b87",
+            name=name,
+        )
     )
-    fig.update_layout(height=460, xaxis_rangeslider_visible=False, title=f"{name} ({code})")
+    fig.update_layout(
+        height=450,
+        margin=dict(l=8, r=8, t=36, b=8),
+        xaxis_rangeslider_visible=False,
+        template="plotly_dark",
+        title=f"{name} ({code})",
+    )
     st.plotly_chart(fig, use_container_width=True)
 
 
-def render_news(name: str):
-    st.markdown(f"### 📰 {name} 관련 뉴스")
-    try:
-        titles = fetch_naver_news_titles(f"{name} 특징주", limit=12)
-        if not titles:
-            st.info("관련 뉴스가 충분히 수집되지 않았습니다.")
-            return
-        for t in titles:
-            st.write(f"- {t}")
-    except Exception as e:
-        st.warning(f"뉴스 수집 실패: {e}")
+# --------------------------
+# Header
+# --------------------------
+st.markdown(
+    """
+<div class="hero">
+  <h1>ShadowTrade Pro · Theme Leaderboard</h1>
+  <p>종목명 기반 테마 탐색 → 주도주 점수화(거래대금/등락률/관심도/뉴스 모멘텀) → 뉴스 + 3D 감성 차트</p>
+</div>
+""",
+    unsafe_allow_html=True,
+)
 
-
-st.title("📈 테마 주도주 Top 10 탐색기 (MVP)")
-st.caption("입력 종목 기반으로 관련 테마를 찾고, 거래대금/상승률/인기/뉴스를 결합해 주도주를 점수화합니다.")
+st.markdown(
+    """
+<span class="metric-chip">거래대금 중심</span>
+<span class="metric-chip">등락률 상위 반영</span>
+<span class="metric-chip">실시간 관심 대리지표</span>
+<span class="metric-chip">특징주 뉴스 모멘텀</span>
+""",
+    unsafe_allow_html=True,
+)
 
 listing = get_krx_listing()
-stock_input = st.text_input("종목명 입력", placeholder="예: 삼성전자")
+all_names = set(listing["Name"].tolist())
 
-if stock_input:
-    if stock_input not in set(listing["Name"]):
-        st.error("종목명을 정확히 입력해 주세요 (KRX 상장 종목명 기준).")
-        st.stop()
+if "top_df" not in st.session_state:
+    st.session_state.top_df = pd.DataFrame()
+if "selected_theme" not in st.session_state:
+    st.session_state.selected_theme = "반도체"
 
-    themes = infer_themes(stock_input)
-    if not themes:
-        st.warning("테마를 자동 추정하지 못했습니다. 아래에서 직접 선택해 주세요.")
-        themes = list(THEME_MAP.keys())
 
-    selected_theme = st.selectbox("관련 테마", themes)
-    top_n = st.slider("Top N", 5, 20, 10)
+# --------------------------
+# Tabs
+# --------------------------
+tab1, tab2, tab3, tab4 = st.tabs(["키워드", "TOP10", "사전(테마)", "설정"])
 
-    leaders = calc_leaders(selected_theme, top_n=top_n)
-    if leaders.empty:
-        st.warning("조건(시총 5천억+)을 만족하는 종목이 없습니다.")
-        st.stop()
+with tab1:
+    st.markdown('<div class="glass">', unsafe_allow_html=True)
+    st.subheader("키워드/종목 입력")
+    stock_name = st.text_input("종목명", placeholder="예) 삼성전자")
 
-    show = leaders[["Name", "Code", "Market", "chg_pct", "value", "marcap", "popularity", "news_hits", "leader_score"]].copy()
-    show.columns = ["종목", "코드", "시장", "등락률(%)", "거래대금", "시총", "인기점수", "뉴스건수", "주도점수"]
+    col_a, col_b = st.columns([1, 1])
+    with col_a:
+        run = st.button("🔎 찾기", use_container_width=True)
+    with col_b:
+        refresh = st.button("↻ TOP10 갱신", use_container_width=True)
 
-    st.markdown("## ✅ 주도주 Top 리스트")
-    st.dataframe(show, use_container_width=True)
+    if run or refresh:
+        if not stock_name:
+            st.warning("종목명을 입력해 주세요.")
+        elif stock_name not in all_names:
+            st.error("KRX 상장 종목명 기준으로 정확히 입력해 주세요.")
+        else:
+            themes = infer_themes(stock_name)
+            if not themes:
+                themes = ["반도체", "AI", "2차전지", "로봇"]
+            st.session_state.selected_theme = themes[0]
+            st.success(f"연관 테마 추정: {', '.join(themes)}")
+            st.session_state.top_df = build_top(st.session_state.selected_theme, top_n=10)
 
-    st.info("주도점수 산식: 거래대금(35) + 등락률(30) + 인기검색대리(15) + 뉴스모멘텀(20) / 시총 5천억 이상 필터")
+    st.markdown("<p class='small-note'>* 시총 5천억 미만 종목은 자동 제외됩니다.</p>", unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    pick = st.selectbox("차트/뉴스 볼 종목", show["종목"].tolist())
-    row = leaders[leaders["Name"] == pick].iloc[0]
+with tab2:
+    st.markdown('<div class="glass">', unsafe_allow_html=True)
+    st.subheader(f"주도주 Top10 · {st.session_state.selected_theme}")
 
-    col1, col2 = st.columns([1.35, 1])
-    with col1:
-        render_chart(row["Code"], row["Name"])
-    with col2:
-        render_news(row["Name"])
+    if st.session_state.top_df.empty:
+        st.info("키워드 탭에서 종목명을 입력하고 찾기를 눌러 주세요.")
+    else:
+        df = st.session_state.top_df.copy()
+        show = df[["Name", "Code", "Market", "chg_pct", "value", "marcap", "popularity", "news_hits", "leader_score"]]
+        show.columns = ["종목", "코드", "시장", "등락률(%)", "거래대금", "시총", "관심도", "뉴스건수", "주도점수"]
+        st.dataframe(show, use_container_width=True, hide_index=True)
 
-st.markdown("---")
-st.caption("주의: 본 앱은 투자판단 보조 도구이며, 실시간 HTS 데이터(0186/0181/0198)와 1:1 동일하지 않을 수 있습니다.")
+        st.caption("주도점수 = 거래대금(35) + 등락률(30) + 관심도(15) + 뉴스모멘텀(20)")
+
+        picked = st.selectbox("상세 보기 종목", show["종목"].tolist())
+        r = df[df["Name"] == picked].iloc[0]
+
+        c1, c2 = st.columns([1.4, 1])
+        with c1:
+            render_candle(r["Code"], r["Name"])
+        with c2:
+            st.markdown("#### 📰 관련 뉴스")
+            try:
+                links = fetch_news_links(f"{picked} 특징주", 10)
+                if not links:
+                    st.write("- 뉴스가 충분히 없습니다.")
+                for title, link in links:
+                    st.markdown(f"- [{title}]({link})")
+            except Exception as e:
+                st.warning(f"뉴스 로딩 실패: {e}")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with tab3:
+    st.markdown('<div class="glass">', unsafe_allow_html=True)
+    st.subheader("테마 사전")
+    theme = st.selectbox("테마 선택", list(THEME_MAP.keys()), index=list(THEME_MAP.keys()).index(st.session_state.selected_theme) if st.session_state.selected_theme in THEME_MAP else 0)
+    st.session_state.selected_theme = theme
+
+    stocks = THEME_MAP.get(theme, [])
+    st.markdown("  ".join([f"`{s}`" for s in stocks]))
+
+    if st.button("이 테마로 TOP10 재계산", use_container_width=True):
+        st.session_state.top_df = build_top(theme, top_n=10)
+        st.success("갱신 완료")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with tab4:
+    st.markdown('<div class="glass">', unsafe_allow_html=True)
+    st.subheader("설정")
+    top_n = st.slider("TOP N", 5, 20, 10)
+    min_cap = st.number_input("최소 시가총액(원)", value=500_000_000_000, step=100_000_000_000)
+
+    if st.button("현재 테마에 설정 적용", use_container_width=True):
+        st.session_state.top_df = build_top(st.session_state.selected_theme, min_marcap=int(min_cap), top_n=int(top_n))
+        st.success("설정 반영 완료")
+
+    st.markdown("<p class='small-note'>실시간 HTS(0186/0181/0198) 원천과 1:1 동일하지는 않으며, 공개 데이터 기반 근사 모델입니다.</p>", unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)

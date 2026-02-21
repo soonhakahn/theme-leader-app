@@ -1,0 +1,21 @@
+<svg width="420" height="120" viewBox="0 0 420 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5BC0FF"/>
+      <stop offset="100%" stop-color="#8A6BFF"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect x="1" y="1" width="418" height="118" rx="18" fill="#0D1F45" stroke="#385D9D"/>
+  <g filter="url(#glow)">
+    <path d="M35 84 L58 36 L81 84" stroke="url(#g1)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M90 84 L113 36 L136 84" stroke="url(#g1)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="153" cy="41" r="7" fill="#35D39A"/>
+    <path d="M153 48 V84" stroke="#35D39A" stroke-width="6" stroke-linecap="round"/>
+  </g>
+  <text x="182" y="56" fill="#E8EEFF" font-size="30" font-family="Arial, sans-serif" font-weight="700">ShadowTrade Pro</text>
+  <text x="182" y="84" fill="#A8B5D9" font-size="16" font-family="Arial, sans-serif">Theme Leaderboard</text>
+</svg>

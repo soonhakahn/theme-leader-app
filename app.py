@@ -330,6 +330,11 @@ def render_candle(code: str, name: str):
 # --------------------------
 # Header
 # --------------------------
+try:
+    st.image("assets/logo.svg", use_container_width=True)
+except Exception:
+    pass
+
 st.markdown(
     """
 <div class="hero">

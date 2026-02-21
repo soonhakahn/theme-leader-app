@@ -459,7 +459,24 @@ if "inferred_themes" not in st.session_state:
     st.session_state.inferred_themes = []
 if "picked_stock" not in st.session_state:
     st.session_state.picked_stock = None
+if "ultra_mobile" not in st.session_state:
+    st.session_state.ultra_mobile = False
 
+if st.session_state.ultra_mobile:
+    st.markdown(
+        """
+<style>
+@media (max-width: 900px) {
+  .main .block-container {padding-left: 0.55rem; padding-right: 0.55rem;}
+  .stButton > button {min-height: 46px; font-size: 1rem;}
+  .stSelectbox label, .stTextInput label, .stNumberInput label {font-size: 0.95rem;}
+  .stTabs [data-baseweb="tab"] {font-size: 0.92rem; min-width: 74px;}
+  p, li, .small-note {font-size: 0.94rem !important;}
+}
+</style>
+""",
+        unsafe_allow_html=True,
+    )
 
 # --------------------------
 # Tabs
@@ -580,10 +597,12 @@ with tab4:
     st.subheader("설정")
     top_n = st.slider("TOP N", 5, 20, 10)
     min_cap = st.number_input("최소 시가총액(원)", value=500_000_000_000, step=100_000_000_000)
+    st.checkbox("초모바일(아이폰 미니) 모드", key="ultra_mobile")
 
     if st.button("현재 테마에 설정 적용", width="stretch"):
         st.session_state.top_df = build_top(st.session_state.selected_theme, min_marcap=int(min_cap), top_n=int(top_n))
         st.success("설정 반영 완료")
 
     st.markdown("<p class='small-note'>실시간 HTS(0186/0181/0198) 원천과 1:1 동일하지는 않으며, 공개 데이터 기반 근사 모델입니다.</p>", unsafe_allow_html=True)
+    st.markdown("<p class='small-note'>초모바일 모드를 켜면 버튼/폰트/여백이 더 크게 조정됩니다.</p>", unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)

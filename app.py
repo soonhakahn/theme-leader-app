@@ -187,18 +187,50 @@ def latest_bday_str() -> str:
 
 @st.cache_data(ttl=60 * 10)
 def get_latest_ohlcv(date_str: str) -> pd.DataFrame:
-    o = stock.get_market_ohlcv_by_ticker(date_str, market="ALL").reset_index()
-    o = o.rename(columns={"티커": "Code", "종가": "close", "등락률": "chg_pct", "거래대금": "value"})
-    o["Code"] = o["Code"].astype(str).str.zfill(6)
-    return o[["Code", "close", "chg_pct", "value"]]
+    """pykrx 우선, 실패 시 빈 DF 반환(상위에서 FDR 폴백 처리)."""
+    try:
+        o = stock.get_market_ohlcv_by_ticker(date_str, market="ALL").reset_index()
+        o = o.rename(columns={"티커": "Code", "종가": "close", "등락률": "chg_pct", "거래대금": "value"})
+        o["Code"] = o["Code"].astype(str).str.zfill(6)
+        return o[["Code", "close", "chg_pct", "value"]]
+    except Exception:
+        return pd.DataFrame(columns=["Code", "close", "chg_pct", "value"])
 
 
 @st.cache_data(ttl=60 * 10)
 def get_latest_marcap(date_str: str) -> pd.DataFrame:
-    m = stock.get_market_cap_by_ticker(date_str, market="ALL").reset_index()
-    m = m.rename(columns={"티커": "Code", "시가총액": "marcap"})
-    m["Code"] = m["Code"].astype(str).str.zfill(6)
-    return m[["Code", "marcap"]]
+    try:
+        m = stock.get_market_cap_by_ticker(date_str, market="ALL").reset_index()
+        m = m.rename(columns={"티커": "Code", "시가총액": "marcap"})
+        m["Code"] = m["Code"].astype(str).str.zfill(6)
+        return m[["Code", "marcap"]]
+    except Exception:
+        return pd.DataFrame(columns=["Code", "marcap"])
+
+
+def fallback_price_snapshot(codes: List[str]) -> pd.DataFrame:
+    """FDR 기반 폴백: 최근 10일에서 마지막 2개 거래일로 등락률/거래대금 근사치 생성."""
+    rows = []
+    end = dt.date.today()
+    start = end - dt.timedelta(days=14)
+    for code in codes:
+        try:
+            h = fdr.DataReader(code, start, end)
+            if h is None or len(h) < 2:
+                continue
+            h = h.dropna()
+            if len(h) < 2:
+                continue
+            last = h.iloc[-1]
+            prev = h.iloc[-2]
+            close = float(last["Close"])
+            prev_close = float(prev["Close"])
+            chg_pct = ((close / prev_close) - 1.0) * 100 if prev_close else 0.0
+            value = float(last.get("Volume", 0)) * close
+            rows.append({"Code": str(code).zfill(6), "close": close, "chg_pct": chg_pct, "value": value})
+        except Exception:
+            continue
+    return pd.DataFrame(rows, columns=["Code", "close", "chg_pct", "value"])
 
 
 @st.cache_data(ttl=60 * 8)
@@ -261,9 +293,19 @@ def build_top(theme: str, min_marcap=500_000_000_000, top_n=10) -> pd.DataFrame:
 
     ds = latest_bday_str()
     px = get_latest_ohlcv(ds)
+    if px.empty:
+        px = fallback_price_snapshot(universe["Code"].tolist())
+
     mc = get_latest_marcap(ds)
+    # pykrx 실패 시 listing의 Marcap 사용
+    if mc.empty and "Marcap" in listing.columns:
+        mc = listing[["Code", "Marcap"]].rename(columns={"Marcap": "marcap"}).copy()
 
     df = universe.merge(px, on="Code", how="left").merge(mc, on="Code", how="left")
+    # 가격정보가 없는 행 제거
+    df = df.dropna(subset=["close", "chg_pct", "value"], how="any")
+    # 시총 결측이면 0 처리 후 필터
+    df["marcap"] = pd.to_numeric(df["marcap"], errors="coerce").fillna(0)
     df = df[df["marcap"] >= min_marcap].copy()
     if df.empty:
         return df

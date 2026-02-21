@@ -174,6 +174,19 @@ THEME_MAP: Dict[str, List[str]] = {
     "바이오": ["삼성바이오로직스", "셀트리온", "HLB", "알테오젠", "유한양행"],
 }
 
+THEME_KEYWORDS: Dict[str, List[str]] = {
+    "반도체": ["반도체", "HBM", "메모리", "파운드리"],
+    "2차전지": ["2차전지", "배터리", "양극재", "음극재", "전해질"],
+    "로봇": ["로봇", "자동화", "협동로봇"],
+    "방산": ["방산", "미사일", "국방", "K-방산"],
+    "전력": ["전력", "변압기", "전선", "전력기기"],
+    "원전": ["원전", "SMR", "원자력"],
+    "조선": ["조선", "LNG선", "선박"],
+    "AI": ["AI", "인공지능", "LLM", "데이터센터"],
+    "양자": ["양자", "퀀텀", "양자컴퓨팅"],
+    "바이오": ["바이오", "신약", "임상", "항체"],
+}
+
 
 @st.cache_data(ttl=60 * 30)
 def get_krx_listing() -> pd.DataFrame:
@@ -280,19 +293,44 @@ def minmax(s: pd.Series) -> pd.Series:
     return (s - s.min()) / (s.max() - s.min())
 
 
-def infer_themes(name: str) -> List[str]:
+def infer_themes(name: str, listing_df: pd.DataFrame) -> List[str]:
+    # 1) 직접 사전 매칭
     direct = [t for t, arr in THEME_MAP.items() if name in arr]
     if direct:
         return direct
-    guessed = []
+
+    scored: Dict[str, int] = {}
+
+    # 2) 뉴스 키워드 매칭(테마명 + 동의어)
     try:
-        blob = " ".join(fetch_news_titles(name, 25))
-        for t in THEME_MAP.keys():
-            if re.search(t, blob, re.IGNORECASE):
-                guessed.append(t)
+        blob = " ".join(fetch_news_titles(name, 30))
+        for theme, kws in THEME_KEYWORDS.items():
+            cnt = 0
+            for kw in [theme] + kws:
+                cnt += len(re.findall(re.escape(kw), blob, flags=re.IGNORECASE))
+            if cnt > 0:
+                scored[theme] = scored.get(theme, 0) + cnt
     except Exception:
         pass
-    return guessed[:3]
+
+    # 3) 업종/섹터 힌트 매칭
+    row = listing_df[listing_df["Name"] == name]
+    if not row.empty:
+        txt = " ".join(
+            [
+                str(row.iloc[0].get("Sector", "")),
+                str(row.iloc[0].get("Industry", "")),
+            ]
+        )
+        for theme, kws in THEME_KEYWORDS.items():
+            cnt = 0
+            for kw in [theme] + kws:
+                cnt += len(re.findall(re.escape(kw), txt, flags=re.IGNORECASE))
+            if cnt > 0:
+                scored[theme] = scored.get(theme, 0) + cnt
+
+    ranked = [k for k, _ in sorted(scored.items(), key=lambda x: x[1], reverse=True)]
+    return ranked[:4]
 
 
 def build_top(theme: str, min_marcap=500_000_000_000, top_n=10) -> pd.DataFrame:
@@ -503,31 +541,32 @@ with tab1:
         elif stock_name not in all_names:
             st.error("KRX 상장 종목명 기준으로 정확히 입력해 주세요.")
         else:
-            themes = infer_themes(stock_name)
-            if not themes:
-                themes = ["반도체", "AI", "2차전지", "로봇"]
+            themes = infer_themes(stock_name, listing)
             st.session_state.inferred_themes = themes
-            st.session_state.selected_theme = themes[0]
-            st.success(f"연관 테마 추정: {', '.join(themes)}")
-            st.session_state.top_df = build_top(st.session_state.selected_theme, top_n=10)
+            if themes:
+                st.session_state.selected_theme = themes[0]
+                st.success(f"연관 테마 추정: {', '.join(themes)}")
+                st.session_state.top_df = build_top(st.session_state.selected_theme, top_n=10)
+            else:
+                st.warning("이 종목의 테마를 자동으로 특정하지 못했습니다. 아래에서 테마를 직접 선택해 주세요.")
 
-    if st.session_state.inferred_themes:
-        st.markdown("#### 연관 테마 빠른 선택")
-        cols = st.columns(min(4, len(st.session_state.inferred_themes)))
-        for i, t in enumerate(st.session_state.inferred_themes):
-            with cols[i % len(cols)]:
-                if st.button(f"테마: {t}", key=f"theme_btn_{t}", width="stretch"):
-                    st.session_state.selected_theme = t
-                    st.session_state.top_df = build_top(t, top_n=10)
+    theme_candidates = st.session_state.inferred_themes if st.session_state.inferred_themes else list(THEME_MAP.keys())[:6]
+    st.markdown("#### 연관 테마 빠른 선택")
+    cols = st.columns(min(4, len(theme_candidates)))
+    for i, t in enumerate(theme_candidates):
+        with cols[i % len(cols)]:
+            if st.button(f"테마: {t}", key=f"theme_btn_{t}", width="stretch"):
+                st.session_state.selected_theme = t
+                st.session_state.top_df = build_top(t, top_n=10)
 
-        st.markdown("#### 관련 테마주 버튼")
-        stocks = THEME_MAP.get(st.session_state.selected_theme, [])
-        if stocks:
-            cols2 = st.columns(3)
-            for i, s in enumerate(stocks[:12]):
-                with cols2[i % 3]:
-                    if st.button(s, key=f"stock_btn_{s}", width="stretch"):
-                        st.session_state.picked_stock = s
+    st.markdown("#### 관련 테마주 버튼")
+    stocks = THEME_MAP.get(st.session_state.selected_theme, [])
+    if stocks:
+        cols2 = st.columns(3)
+        for i, s in enumerate(stocks[:12]):
+            with cols2[i % 3]:
+                if st.button(s, key=f"stock_btn_{s}", width="stretch"):
+                    st.session_state.picked_stock = s
 
     st.markdown("<p class='small-note'>* 시총 5천억 미만 종목은 자동 제외됩니다.</p>", unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)

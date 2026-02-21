@@ -404,6 +404,10 @@ if "top_df" not in st.session_state:
     st.session_state.top_df = pd.DataFrame()
 if "selected_theme" not in st.session_state:
     st.session_state.selected_theme = "반도체"
+if "inferred_themes" not in st.session_state:
+    st.session_state.inferred_themes = []
+if "picked_stock" not in st.session_state:
+    st.session_state.picked_stock = None
 
 
 # --------------------------
@@ -431,9 +435,28 @@ with tab1:
             themes = infer_themes(stock_name)
             if not themes:
                 themes = ["반도체", "AI", "2차전지", "로봇"]
+            st.session_state.inferred_themes = themes
             st.session_state.selected_theme = themes[0]
             st.success(f"연관 테마 추정: {', '.join(themes)}")
             st.session_state.top_df = build_top(st.session_state.selected_theme, top_n=10)
+
+    if st.session_state.inferred_themes:
+        st.markdown("#### 연관 테마 빠른 선택")
+        cols = st.columns(min(4, len(st.session_state.inferred_themes)))
+        for i, t in enumerate(st.session_state.inferred_themes):
+            with cols[i % len(cols)]:
+                if st.button(f"테마: {t}", key=f"theme_btn_{t}", use_container_width=True):
+                    st.session_state.selected_theme = t
+                    st.session_state.top_df = build_top(t, top_n=10)
+
+        st.markdown("#### 관련 테마주 버튼")
+        stocks = THEME_MAP.get(st.session_state.selected_theme, [])
+        if stocks:
+            cols2 = st.columns(3)
+            for i, s in enumerate(stocks[:12]):
+                with cols2[i % 3]:
+                    if st.button(s, key=f"stock_btn_{s}", use_container_width=True):
+                        st.session_state.picked_stock = s
 
     st.markdown("<p class='small-note'>* 시총 5천억 미만 종목은 자동 제외됩니다.</p>", unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -452,7 +475,11 @@ with tab2:
 
         st.caption("주도점수 = 거래대금(35) + 등락률(30) + 관심도(15) + 뉴스모멘텀(20)")
 
-        picked = st.selectbox("상세 보기 종목", show["종목"].tolist())
+        options = show["종목"].tolist()
+        default_idx = 0
+        if st.session_state.picked_stock in options:
+            default_idx = options.index(st.session_state.picked_stock)
+        picked = st.selectbox("상세 보기 종목", options, index=default_idx)
         r = df[df["Name"] == picked].iloc[0]
 
         c1, c2 = st.columns([1.4, 1])

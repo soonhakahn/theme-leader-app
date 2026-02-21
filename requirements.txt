@@ -1,7 +1,7 @@
 streamlit>=1.37
 pandas>=2.2
-numpy>=1.26
-FinanceDataReader>=0.9.96
+numpy>=2.0
+finance-datareader
 pykrx>=1.0.48
 plotly>=5.24
 beautifulsoup4>=4.12

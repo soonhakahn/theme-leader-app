@@ -418,7 +418,10 @@ tab1, tab2, tab3, tab4 = st.tabs(["키워드", "TOP10", "사전(테마)", "설�
 with tab1:
     st.markdown('<div class="glass">', unsafe_allow_html=True)
     st.subheader("키워드/종목 입력")
-    stock_name = st.text_input("종목명", placeholder="예) 삼성전자")
+    name_list = sorted(list(all_names))
+    picked_name = st.selectbox("종목명 목록에서 선택", options=name_list, index=name_list.index("삼성전자") if "삼성전자" in name_list else 0)
+    typed_name = st.text_input("또는 직접 입력", placeholder="예) 삼성전자")
+    stock_name = typed_name.strip() if typed_name.strip() else picked_name
 
     col_a, col_b = st.columns([1, 1])
     with col_a:

@@ -142,6 +142,16 @@ div[data-testid="stDataFrame"] {
   font-size:0.82rem;
 }
 
+
+
+@media (max-width: 768px) {
+  .main .block-container {padding-top: 0.7rem; padding-left: 0.7rem; padding-right: 0.7rem;}
+  .hero {padding: 0.85rem 0.9rem; border-radius: 16px;}
+  .hero p {font-size: 0.86rem; line-height: 1.3;}
+  .glass {padding: 0.75rem 0.75rem; border-radius: 14px;}
+  .stTabs [data-baseweb="tab"] {padding: 0.34rem 0.62rem; height: 2.1rem; font-size: 0.88rem;}
+}
+
 </style>
 """,
     unsafe_allow_html=True,
@@ -368,7 +378,7 @@ def render_candle(code: str, name: str):
         template="plotly_dark",
         title=f"{name} ({code})",
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 def render_stock_analysis(code: str, name: str, listing_df: pd.DataFrame):
@@ -414,7 +424,7 @@ def render_stock_analysis(code: str, name: str, listing_df: pd.DataFrame):
 # Header
 # --------------------------
 try:
-    st.image("assets/logo.svg", use_container_width=True)
+    st.image("assets/logo.svg", width="stretch")
 except Exception:
     pass
 
@@ -466,9 +476,9 @@ with tab1:
 
     col_a, col_b = st.columns([1, 1])
     with col_a:
-        run = st.button("🔎 찾기", use_container_width=True)
+        run = st.button("🔎 찾기", width="stretch")
     with col_b:
-        refresh = st.button("↻ TOP10 갱신", use_container_width=True)
+        refresh = st.button("↻ TOP10 갱신", width="stretch")
 
     if run or refresh:
         if not stock_name:
@@ -489,7 +499,7 @@ with tab1:
         cols = st.columns(min(4, len(st.session_state.inferred_themes)))
         for i, t in enumerate(st.session_state.inferred_themes):
             with cols[i % len(cols)]:
-                if st.button(f"테마: {t}", key=f"theme_btn_{t}", use_container_width=True):
+                if st.button(f"테마: {t}", key=f"theme_btn_{t}", width="stretch"):
                     st.session_state.selected_theme = t
                     st.session_state.top_df = build_top(t, top_n=10)
 
@@ -499,7 +509,7 @@ with tab1:
             cols2 = st.columns(3)
             for i, s in enumerate(stocks[:12]):
                 with cols2[i % 3]:
-                    if st.button(s, key=f"stock_btn_{s}", use_container_width=True):
+                    if st.button(s, key=f"stock_btn_{s}", width="stretch"):
                         st.session_state.picked_stock = s
 
     st.markdown("<p class='small-note'>* 시총 5천억 미만 종목은 자동 제외됩니다.</p>", unsafe_allow_html=True)
@@ -515,7 +525,7 @@ with tab2:
         df = st.session_state.top_df.copy()
         show = df[["Name", "Code", "Market", "chg_pct", "value", "marcap", "popularity", "news_hits", "leader_score"]]
         show.columns = ["종목", "코드", "시장", "등락률(%)", "거래대금", "시총", "관심도", "뉴스건수", "주도점수"]
-        st.dataframe(show, use_container_width=True, hide_index=True)
+        st.dataframe(show, width="stretch", hide_index=True)
 
         st.caption("주도점수 = 거래대금(35) + 등락률(30) + 관심도(15) + 뉴스모멘텀(20)")
 
@@ -523,7 +533,7 @@ with tab2:
         quick_cols = st.columns(2)
         for i, nm in enumerate(show["종목"].tolist()):
             with quick_cols[i % 2]:
-                if st.button(f"{i+1}. {nm}", key=f"top_pick_{nm}", use_container_width=True):
+                if st.button(f"{i+1}. {nm}", key=f"top_pick_{nm}", width="stretch"):
                     st.session_state.picked_stock = nm
 
         options = show["종목"].tolist()
@@ -560,7 +570,7 @@ with tab3:
     stocks = THEME_MAP.get(theme, [])
     st.markdown("  ".join([f"`{s}`" for s in stocks]))
 
-    if st.button("이 테마로 TOP10 재계산", use_container_width=True):
+    if st.button("이 테마로 TOP10 재계산", width="stretch"):
         st.session_state.top_df = build_top(theme, top_n=10)
         st.success("갱신 완료")
     st.markdown('</div>', unsafe_allow_html=True)
@@ -571,7 +581,7 @@ with tab4:
     top_n = st.slider("TOP N", 5, 20, 10)
     min_cap = st.number_input("최소 시가총액(원)", value=500_000_000_000, step=100_000_000_000)
 
-    if st.button("현재 테마에 설정 적용", use_container_width=True):
+    if st.button("현재 테마에 설정 적용", width="stretch"):
         st.session_state.top_df = build_top(st.session_state.selected_theme, min_marcap=int(min_cap), top_n=int(top_n))
         st.success("설정 반영 완료")
 
